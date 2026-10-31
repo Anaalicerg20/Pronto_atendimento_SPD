@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package consultorio;
+
+message RequisicaoConsulta {
+  float id_paciente = 1; //tipo_ident 
+  string descricao = 2;
+}
+
+message RespostaConsulta {
+  float id_medico = 1;
+}
+
+service Consultorio {
+  rpc Consulta (RequisicaoConsulta) returns (RespostaConsulta);
+}

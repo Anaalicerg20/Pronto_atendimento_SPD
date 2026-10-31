@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package ambulatorio;
+
+// = id único e binário daquele campo específico dentro da mensagem 
+message RequisicaoProcuraMedico {
+  float id_paciente = 1; //tipo_ident 
+}
+
+message RespostaProcuraMedico {
+  float id_medico = 1; 
+  string ender = 2; //tipo_ender
+  uint32 porto = 3; //tipo_porto 
+}
+
+message RequisicaoRegistraMedico {
+  float id_medico = 1;
+  uint32 porto = 2;
+}
+
+message RespostaRegistraMedico {
+  int32 status = 1;
+}
+
+message RequisicaoChamaPaciente {
+  float id_medico = 1;
+}
+
+message RespostaChamaPaciente {
+  float id_paciente = 1;
+}
+
+message EmptyTermino {}
+
+message RespostaTermino {
+  int32 liberados = 1;
+}
+
+service Ambulatorio {
+  rpc ProcuraMedico (RequisicaoProcuraMedico) returns (RespostaProcuraMedico);
+  rpc RegistraMedico (RequisicaoRegistraMedico) returns (RespostaRegistraMedico);
+  rpc ChamaPaciente (RequisicaoChamaPaciente) returns (RespostaChamaPaciente);
+  rpc Termino (EmptyTermino) returns (RespostaTermino);
+}
