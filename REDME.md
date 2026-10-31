@@ -1,20 +1,42 @@
-## Arquivo .proto
+# Pronto Atendimento Distribuído (gRPC + Threads)
 
-Mesma sintaxe de C;
-Contrato formal entre servidor e cliente;
-Define as estruturas das mensagens;
-Define os métodos remotos que o servidor disponibiliza para os clientes chamarem;
-Não é um executável: dois arquivos em python serao gerados ao compilar os .
-proto;
+Sistema simulador de pronto-atendimento médico distribuído desenvolvido em Python 3 utilizando gRPC para comunicação remota (RPC) e primitivas de sincronização (`threading.Lock`, `threading.Condition`).
 
-## gRPC
+---
 
-Permite que uma máquina chame uma função ou método em outro programa(sehja em outra máquina ou no memso computador) como se tivesse executando uma função local
+## 1. Conceitos Fundamentais
 
-Nota: gRPC empacota os parâmetros, abre a conexão de rede, aciona o método no servidor remoto e devolve a resposta direto para a variável resultado
+### RPC (Remote Procedure Call)
 
-## RPC
+Modelo de computação distribuída que permite a um programa invocar um procedimento/função em outro espaço de endereçamento (em outro processo ou máquina remota) com a mesma sintaxe de uma chamada de função local, abstraindo o transporte de rede.
 
-Dois sistemas conversando via web
-Cliente: monta uma requisição HTTP(GET, POST) formato JSON e envia para uma URL
-Servidor: recebe texto, faz parse do JSON, calcula e devolve outro JSON
+### gRPC & Protocol Buffers (.proto)
+
+- **Contrato Estrito:** O arquivo `.proto` define formalmente a interface do serviço (métodos RPC exportados) e a estrutura das mensagens de dados com tipagem estática.
+- **Sem JSON:** A comunicação não trafega strings JSON nem requer parse textual; os dados são serializados diretamente em formato binário de alta densidade via Protobuf.
+- **Geração de Stubs:** A compilação do `.proto` gera classes Python de apoio:
+  - `*_pb2.py`: estruturas das mensagens e rotinas de serialização binária.
+  - `*_pb2_grpc.py`: classes base para implementação dos servidores (`Servicer`) e procuradores de rede para os clientes (`Stub`).
+
+---
+
+## 2. Configuração do Ambiente
+
+Requisitos: Python 3.8+ e ambiente Linux.
+
+# Criar e ativar o ambiente virtual
+
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Instalar dependências necessárias
+
+pip install grpcio grpcio-tools
+
+# compilar arquivos .proto
+
+make stubs
+
+# limpar arquivos gerados automaticamente
+
+make clean
