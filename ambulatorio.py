@@ -5,11 +5,9 @@ import ambulatorio_pb2_grpc
 from collections import deque
 
 import sys
-import os
-import socket
 
 from mytimer import tstamp_msg, my_sleep
-from threading import Thread, Lock, Condition, Semaphore
+from threading import Thread, Lock, Condition, Event
 
 def split_peer(addr_str: str):
     if addr_str.startswith(("ipv4:", "ipv6:")):
@@ -22,7 +20,7 @@ def split_peer(addr_str: str):
     return address, int(port)
 class AmbulatorioServicer(ambulatorio_pb2_grpc.AmbulatorioServicer):
     
-    def __init__(self, num_medicos, num_cadeiras):
+    def __init__(self, num_medicos, num_cadeiras, stop_event):
 
         self.fila_medicos = deque(maxlen=num_medicos) #fila médicos livres: guarda prontuários iniciados pelos médicos
         self.fila_espera = deque(maxlen=num_cadeiras) #fila pacientes em espera: guarda prontuários iniciados pelos pacientes
@@ -34,7 +32,10 @@ class AmbulatorioServicer(ambulatorio_pb2_grpc.AmbulatorioServicer):
         self.lock = Lock() #mutex
         self.cond_chamadas_ativas = Condition(self.lock) #variável de condição
 
-    def ProcuraMedico(self, request, context, ):
+        self.max_medicos = num_medicos
+        self.stop_event = stop_event
+
+    def ProcuraMedico(self, request):
 
         with self.lock:
             self.chamadas_ativas += 1
@@ -124,7 +125,7 @@ class AmbulatorioServicer(ambulatorio_pb2_grpc.AmbulatorioServicer):
             consultorio = request.porto
             ip_medico , _ = split_peer(context.peer())
 
-            if len(self.fila_medicos) == 0:
+            if len(self.diretorio_medicos) == self.max_medicos:
                 tstamp_msg ("ARM(%4.1f) @ %s:%d = %d" % (id_medico, ip_medico, consultorio, -1))
                 self.chamadas_ativas -= 1
                 if self.chamadas_ativas == 0:
@@ -141,20 +142,87 @@ class AmbulatorioServicer(ambulatorio_pb2_grpc.AmbulatorioServicer):
             if self.chamadas_ativas == 0:
                self.cond_chamadas_ativas.notify()
 
-            return ambulatorio_pb2.RespostaRegistraMedico(status=0)
+        return ambulatorio_pb2.RespostaRegistraMedico(status=0)
 
-    def ChamaPaciente(self, request, context):
-        id_med = request.id_medico
-        
-        # ... (Sua lógica para tirar um paciente da fila de cadeiras) ...
-        
-        return ambulatorio_pb2.RespostaChamaPaciente(id_paciente=123.4)
+    def ChamaPaciente(self, request):
+        with self.lock:
+            self.chamadas_ativas += 1
+            id_medico = request.id_medico
+            tstamp_msg ("ACPI(%4.1f)" % (id_medico))
+
+
+            if len(self.fila_espera) > 0: #tem pacinetes esperando 
+                prontuario = self.fila_espera.popleft()
+                prontuario["id_medico"] = id_medico #escreve o id do medico que atenderá no prontuário 
+                id_paciente_atendido = prontuario["id_paciente"] #lê o id do paciente 
+
+                endereco_medico = self.diretorio_medicos[id_medico]["ender"]
+                consultorio_medico = self.diretorio_medicos[id_medico]["porto"]
+
+                prontuario["condicao"].notify() #notifica que o médico "chegou"
+
+            else:
+                prontuario = {
+                    "id_paciente": None,
+                    "id_medico": id_medico,
+                    "condicao": Condition(self.lock)
+                }
+
+                self.fila_medicos.append(prontuario) #add prontuario na fila
+                tstamp_msg ("ACPE(%4.1f)" % (id_medico))
+                
+                while prontuario["id_paciente"] is None:
+                    prontuario["condicao"].wait() #espera até um pacinete chegar
+
+                id_paciente_atendido = prontuario["id_paciente"]
+
+        if id_paciente_atendido != 0:
+            my_sleep(0.1)
+
+        with self.lock:
+            tstamp_msg ("ACPR(%4.1f) -> P(%4.1f)" % (id_medico, id_paciente_atendido))
+            self.chamadas_ativas -= 1
+
+            if self.chamadas_ativas == 0:
+                self.cond_chamadas_ativas.notify()
+
+        return ambulatorio_pb2.RespostaChamaPaciente(id_paciente=id_paciente_atendido)
+    
+    def executar_desligamento(self):
+        my_sleep(1)
+        self.stop_event.set()
 
     def Termino(self, request, context):
-        # ... (Sua lógica para limpar as filas e calcular os liberados) ...
-        
-        return ambulatorio_pb2.RespostaTermino(liberados=-3)
+        with self.lock:
+            tstamp_msg ("ATEI")
 
+            count_medicos = 0
+            count_pacientes = 0
+
+            while len(self.fila_medicos) > 0:
+                count_medicos += 1 
+                prontuario = self.fila_medicos.popleft()
+                prontuario["id_paciente"] = 0.0
+                prontuario["condicao"].notify()
+
+            while len(self.fila_espera) > 0:
+                count_pacientes += 1
+                prontuario = self.fila_espera.popleft()
+                prontuario["id_medico"] = 0.0
+                prontuario["condicao"].notify()
+
+            if count_pacientes > 0:
+                liberados = -count_pacientes
+            else:
+                liberados = count_medicos
+
+            while self.chamadas_ativas > 0:
+                self.cond_chamadas_ativas.wait()
+
+            Thread(target=self.executar_desligamento).start()
+            tstamp_msg("ATER -> %d" % liberados)
+
+            return ambulatorio_pb2.RespostaTermino(liberados=liberados)
 
 def serve():
     num_cadeiras = int(sys.argv[1]) 
@@ -162,13 +230,17 @@ def serve():
     porta = int(sys.argv[3])
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    
-    ambulatorio_pb2_grpc.add_AmbulatorioServicer_to_server(AmbulatorioServicer(num_medicos, num_cadeiras), server )
+
+    stop_event = Event()
+
+    ambulatorio_pb2_grpc.add_AmbulatorioServicer_to_server(AmbulatorioServicer(num_medicos, num_cadeiras, stop_event), server )
     
     server.add_insecure_port(f'[::]:{porta}')
     server.start()
     tstamp_msg("AI(%d,%d)@%d" % (num_cadeiras, num_medicos, porta))
-    server.wait_for_termination()
+
+    stop_event.wait()
+    server.stop(0)
 
 if __name__ == '__main__':
     serve()
