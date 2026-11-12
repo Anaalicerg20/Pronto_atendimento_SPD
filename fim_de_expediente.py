@@ -18,7 +18,7 @@ def run():
  
     porta_int = int(porta)
 
-    tstamp_msg(f"FE({endereco}, {porta_int})")
+    tstamp_msg(f"FE({endereco},{porta_int})")
 
     canal = grpc.insecure_channel(f"{endereco}:{porta}")#ativamento da linha telefônica
 
