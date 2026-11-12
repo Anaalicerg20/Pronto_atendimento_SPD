@@ -2,7 +2,7 @@ import sys
 import grpc
 import threading
 from concurrent import futures
-from mytimer import tstamp_msg, my_sleep
+from mytimer import tstamp_msg, mysleep
 
 import ambulatorio_pb2
 import ambulatorio_pb2_grpc
@@ -32,8 +32,7 @@ class ConsultorioServicer(consultorio_pb2_grpc.ConsultorioServicer):
 
 def run():
     if len(sys.argv) != 6:
-        print("Uso: python3 medico.py <porta_cons> <id_medico> <tempo_cons> <ender_amb> <porta_amb>")
-        return
+        sys.exit(1)
 
     porta_cons = int(sys.argv[1])
     id_medico = float(sys.argv[2])
@@ -66,11 +65,10 @@ def run():
         req_chama = ambulatorio_pb2.RequisicaoChamaPaciente(id_medico=id_medico)
         resp_chama = stub_amb.ChamaPaciente(req_chama)
         
+        tstamp_msg(f"MCPR -> {resp_chama.id_paciente:4.1f}")
         if resp_chama.id_paciente < 1:
             tstamp_msg("MT ")
             sys.exit(0)
-
-        tstamp_msg(f"MCPR -> {resp_chama.id_paciente:4.1f}")
 
         sem_porta.release()
 
@@ -78,7 +76,7 @@ def run():
         p_desc = servicer_local.paciente_desc
 
         tstamp_msg(f"MAI({p_id:4.1f},{p_desc})")
-        my_sleep(tempo_cons)
+        mysleep(tempo_cons)
         tstamp_msg("MAF")
 
         sem_fim_consulta.release()

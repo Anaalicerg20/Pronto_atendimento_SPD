@@ -10,8 +10,7 @@ import consultorio_pb2_grpc
 
 def run():
     if len(sys.argv) != 5:
-        print("Uso: python3 paciente.py <id_paciente> <problema> <ender_ambulatorio> <porta_ambulatorio>")
-        return
+        sys.exit(1)
 
     id_paciente = float(sys.argv[1])
     problema = sys.argv[2]

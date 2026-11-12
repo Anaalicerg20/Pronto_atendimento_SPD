@@ -10,8 +10,7 @@ from mytimer import tstamp_msg
 def run():
 
     if len(sys.argv) != 3:
-        print("Uso: python3 fim_de_expediente.py <endereco> <porta>")
-        return
+        sys.exit(1)
 
     endereco = sys.argv[1]
     porta = sys.argv[2]
@@ -30,5 +29,5 @@ def run():
     resposta = stub.Termino(requisicao)
     tstamp_msg(f"FE -> {resposta.liberados}")
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     run()

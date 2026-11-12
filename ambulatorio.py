@@ -6,7 +6,7 @@ from collections import deque
 
 import sys
 
-from mytimer import tstamp_msg, my_sleep
+from mytimer import tstamp_msg, mysleep
 from threading import Thread, Lock, Condition, Event
 
 def split_peer(addr_str: str):
@@ -35,7 +35,7 @@ class AmbulatorioServicer(ambulatorio_pb2_grpc.AmbulatorioServicer):
         self.max_medicos = num_medicos
         self.stop_event = stop_event
 
-    def ProcuraMedico(self, request):
+    def ProcuraMedico(self, request, context):
 
         with self.lock:
             self.chamadas_ativas += 1
@@ -144,7 +144,7 @@ class AmbulatorioServicer(ambulatorio_pb2_grpc.AmbulatorioServicer):
 
         return ambulatorio_pb2.RespostaRegistraMedico(status=0)
 
-    def ChamaPaciente(self, request):
+    def ChamaPaciente(self, request, context):
         with self.lock:
             self.chamadas_ativas += 1
             id_medico = request.id_medico
@@ -155,9 +155,6 @@ class AmbulatorioServicer(ambulatorio_pb2_grpc.AmbulatorioServicer):
                 prontuario = self.fila_espera.popleft()
                 prontuario["id_medico"] = id_medico #escreve o id do medico que atenderá no prontuário 
                 id_paciente_atendido = prontuario["id_paciente"] #lê o id do paciente 
-
-                endereco_medico = self.diretorio_medicos[id_medico]["ender"]
-                consultorio_medico = self.diretorio_medicos[id_medico]["porto"]
 
                 prontuario["condicao"].notify() #notifica que o médico "chegou"
 
@@ -177,7 +174,7 @@ class AmbulatorioServicer(ambulatorio_pb2_grpc.AmbulatorioServicer):
                 id_paciente_atendido = prontuario["id_paciente"]
 
         if id_paciente_atendido != 0:
-            my_sleep(0.1)
+            mysleep(0.1)
 
         with self.lock:
             tstamp_msg ("ACPR(%4.1f) -> P(%4.1f)" % (id_medico, id_paciente_atendido))
@@ -189,7 +186,7 @@ class AmbulatorioServicer(ambulatorio_pb2_grpc.AmbulatorioServicer):
         return ambulatorio_pb2.RespostaChamaPaciente(id_paciente=id_paciente_atendido)
     
     def executar_desligamento(self):
-        my_sleep(1)
+        mysleep(1)
         self.stop_event.set()
 
     def Termino(self, request, context):
@@ -225,6 +222,8 @@ class AmbulatorioServicer(ambulatorio_pb2_grpc.AmbulatorioServicer):
             return ambulatorio_pb2.RespostaTermino(liberados=liberados)
 
 def serve():
+    if len(sys.argv) != 4:
+        sys.exit(1)
     num_cadeiras = int(sys.argv[1]) 
     num_medicos = int(sys.argv[2]) 
     porta = int(sys.argv[3])
