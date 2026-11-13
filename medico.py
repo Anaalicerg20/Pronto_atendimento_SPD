@@ -63,7 +63,13 @@ def run():
         tstamp_msg("MCPI")
         
         req_chama = ambulatorio_pb2.RequisicaoChamaPaciente(id_medico=id_medico)
-        resp_chama = stub_amb.ChamaPaciente(req_chama)
+
+        try:
+            resp_chama = stub_amb.ChamaPaciente(req_chama)
+        except grpc.RpcError:
+            # Se der erro de conexão, o ambulatório já fechou. O médico pode ir embora.
+            tstamp_msg("MT ")
+            sys.exit(0)
         
         tstamp_msg(f"MCPR -> {resp_chama.id_paciente:4.1f}")
         if resp_chama.id_paciente < 1:

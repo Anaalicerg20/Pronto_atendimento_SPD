@@ -43,18 +43,6 @@ class AmbulatorioServicer(ambulatorio_pb2_grpc.AmbulatorioServicer):
             id_paciente = request.id_paciente 
             tstamp_msg ("APMI(%4.1f)" % (id_paciente))
 
-            if len(self.fila_espera) == self.fila_espera.maxlen: #sem cadeiras: cliente vai embora
-                tstamp_msg ("APMR(%4.1f) -> M(%4.1f) @ %s:%d" % (id_paciente, 0, "", 0))
-                
-                self.chamadas_ativas -= 1
-                if self.chamadas_ativas == 0:
-                    self.cond_chamadas_ativas.notify()
-                
-                return ambulatorio_pb2.RespostaProcuraMedico(
-                    id_medico= 0,    
-                    ender="", 
-                    porto= 0
-                )
     
             if len(self.fila_medicos) > 0 : #há medicos livres 
                 prontuario = self.fila_medicos.popleft() #retira o prontuário
@@ -79,8 +67,8 @@ class AmbulatorioServicer(ambulatorio_pb2_grpc.AmbulatorioServicer):
                     porto=consultorio_medico
                 )
         
-            else:
-                #medicos ocupados: cria o prontuario com id do paciente
+            elif len(self.fila_espera) != self.fila_espera.maxlen:
+                #medicos ocupados mas existe cadeira: cria o prontuario com id do paciente 
                 prontuario = {
                 "id_paciente": id_paciente,
                 "id_medico": None,
@@ -115,6 +103,18 @@ class AmbulatorioServicer(ambulatorio_pb2_grpc.AmbulatorioServicer):
                     ender=endereco_medico,
                     porto=consultorio_medico
                 )
+            if len(self.fila_espera) == self.fila_espera.maxlen: #sem cadeiras: cliente vai embora
+                            tstamp_msg ("APMR(%4.1f) -> M(%4.1f) @ %s:%d" % (id_paciente, 0, "", 0))
+                            
+                            self.chamadas_ativas -= 1
+                            if self.chamadas_ativas == 0:
+                                self.cond_chamadas_ativas.notify()
+                            
+                            return ambulatorio_pb2.RespostaProcuraMedico(
+                                id_medico= 0,    
+                                ender="", 
+                                porto= 0
+                            )
             
     def RegistraMedico(self, request, context):
 
