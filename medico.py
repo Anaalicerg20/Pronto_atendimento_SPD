@@ -12,7 +12,7 @@ import consultorio_pb2_grpc
 class ConsultorioServicer(consultorio_pb2_grpc.ConsultorioServicer):
     def __init__(self, id_medico, sem_porta, sem_fim_consulta):
         self.id_medico = id_medico
-        self.sem_porta = sem_porta
+        self.sem_porta = sem_porta 
         self.sem_fim_consulta = sem_fim_consulta
         self.paciente_id = 0
         self.paciente_desc = ""
@@ -22,10 +22,10 @@ class ConsultorioServicer(consultorio_pb2_grpc.ConsultorioServicer):
 
         self.paciente_id = request.id_paciente
         self.paciente_desc = request.descricao
+ 
+        self.sem_porta.acquire() #garante que a thread RPC Consulta aguarde o médico finalizar o ChamaPaciente e sinalizar antes de inciiar o atendimento 
 
-        self.sem_porta.acquire()
-
-        self.sem_fim_consulta.acquire()
+        self.sem_fim_consulta.acquire() #garante que a thread RPC ocnsukta seja retida até que a thread principal conclua o tempo de consulta 
 
         tstamp_msg(f"CR({request.id_paciente:4.1f},{self.id_medico:4.1f})")
         return consultorio_pb2.RespostaConsulta(id_medico=self.id_medico)

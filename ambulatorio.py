@@ -29,8 +29,8 @@ class AmbulatorioServicer(ambulatorio_pb2_grpc.AmbulatorioServicer):
 
         self.chamadas_ativas = 0 #controle RPC 
 
-        self.lock = Lock() #mutex
-        self.cond_chamadas_ativas = Condition(self.lock) #variável de condição
+        self.lock = Lock() #Lock compartilhado entre filas, diretório, contador (chamadas_ativas) : simplifica a seção crítica
+        self.cond_chamadas_ativas = Condition(self.lock) #variável de condição atrelado ao self.lock
 
         self.max_medicos = num_medicos
         self.stop_event = stop_event
@@ -43,7 +43,7 @@ class AmbulatorioServicer(ambulatorio_pb2_grpc.AmbulatorioServicer):
             id_paciente = request.id_paciente 
             tstamp_msg ("APMI(%4.1f)" % (id_paciente))
 
-    
+            #prontuário: objeto de sincronização, quem chega primeiro preenche o prontário e dorme, quem chega depois preenche a seção flatante e acorda o primeiro 
             if len(self.fila_medicos) > 0 : #há medicos livres 
                 prontuario = self.fila_medicos.popleft() #retira o prontuário
                 prontuario ["id_paciente"] = id_paciente #anota  id do pacinete no prontuário
@@ -172,7 +172,7 @@ class AmbulatorioServicer(ambulatorio_pb2_grpc.AmbulatorioServicer):
                     prontuario["condicao"].wait() #espera até um pacinete chegar
 
                 id_paciente_atendido = prontuario["id_paciente"]
-
+        #dorme fora do lock para não bloquear todo o ambulatório enquanto simula tempo de descanso
         if id_paciente_atendido != 0:
             mysleep(0.1)
 
@@ -212,11 +212,11 @@ class AmbulatorioServicer(ambulatorio_pb2_grpc.AmbulatorioServicer):
                 liberados = -count_pacientes
             else:
                 liberados = count_medicos
-
+            #garante que nenhuma thread RPC ativa seja abortada no meio da execção antes do servidr fechar
             while self.chamadas_ativas > 0:
                 self.cond_chamadas_ativas.wait()
 
-            Thread(target=self.executar_desligamento).start()
+            Thread(target=self.executar_desligamento).start() #retorna a resposta pela rede antes q a thread principal execute "server.stop(0)"
             tstamp_msg("ATER -> %d" % liberados)
 
             return ambulatorio_pb2.RespostaTermino(liberados=liberados)
