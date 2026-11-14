@@ -22,10 +22,10 @@ class ConsultorioServicer(consultorio_pb2_grpc.ConsultorioServicer):
 
         self.paciente_id = request.id_paciente
         self.paciente_desc = request.descricao
- 
-        self.sem_porta.acquire() #garante que a thread RPC Consulta aguarde o médico finalizar o ChamaPaciente e sinalizar antes de inciiar o atendimento 
+        
+        self.sem_porta.acquire() #garante que a thread RPC Consulta aguarde o médico finalizar o ChamaPaciente e sinalizar antes de inciar o atendimento 
 
-        self.sem_fim_consulta.acquire() #garante que a thread RPC ocnsukta seja retida até que a thread principal conclua o tempo de consulta 
+        self.sem_fim_consulta.acquire() #garante que a thread RPC consulta seja retida até que a thread principal conclua o tempo de consulta 
 
         tstamp_msg(f"CR({request.id_paciente:4.1f},{self.id_medico:4.1f})")
         return consultorio_pb2.RespostaConsulta(id_medico=self.id_medico)
@@ -39,7 +39,10 @@ def run():
     tempo_cons = float(sys.argv[3])
     ender_amb = sys.argv[4]
     porta_amb = int(sys.argv[5])
-
+    
+    #Semáforos iniciados em 0 para forçar as threads RPC a esperarem a liberação
+    #Os semáforos funcionam como tickets, o médico libera a ação e o paciente a consome instantaneamente
+    #Isso garante o bloqueio automático para o próximo paciente, simplificando o controle dentro do loop de atendimentos
     sem_porta = threading.Semaphore(0)
     sem_fim_consulta = threading.Semaphore(0)
 
@@ -76,7 +79,7 @@ def run():
             tstamp_msg("MT ")
             sys.exit(0)
 
-        sem_porta.release()
+        sem_porta.release() #médico chamou o paciente, assim, libera a thread RPC do paciente para avançar
 
         p_id = servicer_local.paciente_id
         p_desc = servicer_local.paciente_desc
